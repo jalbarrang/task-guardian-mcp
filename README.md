@@ -13,6 +13,7 @@ A Model Context Protocol (MCP) server for intelligent task management in AI-powe
 - 🔍 **Advanced querying** - Filter, sort, and search tasks
 - ⚡ **Batch operations** - Create or update multiple tasks at once
 - 📦 **Custom metadata** - Store project-specific attributes on tasks
+- 🖥️ **Interactive CLI** - Beautiful terminal UI for viewing tasks with Ink and React
 
 ## Installation
 
@@ -35,6 +36,58 @@ For development with auto-reload:
 ```bash
 bun run dev
 ```
+
+### CLI Tool
+
+View tasks in your project using an interactive terminal UI:
+
+```bash
+bun run cli
+```
+
+The CLI reads from the `.task` directory in your current working directory and displays tasks in a beautiful, color-coded table with interactive navigation.
+
+**Features:**
+- 🎯 Navigate through tasks with arrow keys
+- 👁️ View detailed information for any task
+- 🎨 Color-coded status, priority, and type indicators
+- 🔍 Filter tasks by status, priority, or type
+- ⌨️ Full keyboard navigation
+
+**Options:**
+- `--status <status>` - Filter by status (pending|in_progress|completed|blocked|cancelled)
+- `--priority <priority>` - Filter by priority (low|medium|high|critical)
+- `--type <type>` - Filter by type (user_story|task|bug)
+- `--help` - Show help message
+
+**Examples:**
+
+```bash
+# List all tasks
+bun run cli
+
+# List in-progress tasks only
+bun run cli --status in_progress
+
+# List high priority tasks
+bun run cli --priority high
+
+# Combine filters
+bun run cli --status pending --priority critical
+```
+
+**Keyboard shortcuts:**
+
+*In List View:*
+- `↑`/`↓` or `j`/`k` - Navigate through tasks (vim-style supported)
+- `Enter` - View selected task details
+- `q` - Quit the application
+- `Ctrl+C` - Exit
+
+*In Detail View:*
+- Use your terminal's native scrolling (mouse wheel, trackpad, or terminal scroll commands)
+- `Esc` or `b` - Back to list
+- `q` - Quit the application
 
 ### Cursor Integration
 
