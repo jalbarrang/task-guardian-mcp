@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
 import type { Task } from '../schemas/task.schema.js';
+import type { Link } from '../schemas/task.schema.js';
+import { getLinks } from '../services/link.service.js';
 
 interface TaskDetailProps {
   task: Task;
@@ -41,12 +43,23 @@ function getPriorityColor(priority: string): string {
 
 // Format status for display
 function formatStatus(status: string): string {
-  return status.replace('_', ' ').toUpperCase();
+  return status
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+
+// Format priority for display
+function formatPriority(priority: string): string {
+  return priority.charAt(0).toUpperCase() + priority.slice(1).toLowerCase();
 }
 
 // Format type for display
 function formatType(type: string): string {
-  return type.replace('_', ' ');
+  return type
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
 }
 
 // Format date for display
@@ -55,12 +68,67 @@ function formatDate(dateString: string): string {
   return date.toLocaleString();
 }
 
+// Format link type for display based on direction
+function formatLinkType(linkType: string, isIncoming: boolean): string {
+  if (isIncoming) {
+    // Link coming TO this task
+    switch (linkType) {
+      case 'blocks':
+        return 'Blocked by';
+      case 'is_blocked_by':
+        return 'Blocks';
+      case 'relates_to':
+        return 'Related to';
+      case 'duplicates':
+        return 'Duplicated by';
+      case 'is_duplicated_by':
+        return 'Duplicates';
+      default:
+        return linkType;
+    }
+  } else {
+    // Link going FROM this task
+    switch (linkType) {
+      case 'blocks':
+        return 'Blocks';
+      case 'is_blocked_by':
+        return 'Blocked by';
+      case 'relates_to':
+        return 'Related to';
+      case 'duplicates':
+        return 'Duplicates';
+      case 'is_duplicated_by':
+        return 'Duplicated by';
+      default:
+        return linkType;
+    }
+  }
+}
+
 export function TaskDetail({ task, allTasks }: TaskDetailProps) {
   // Find parent task
   const parentTask = task.parentId ? allTasks.find(t => t.id === task.parentId) : undefined;
 
   // Find child tasks
   const childTasks = allTasks.filter(t => t.parentId === task.id);
+
+  // Load linked items
+  const [linksFrom, setLinksFrom] = useState<Link[]>([]);
+  const [linksTo, setLinksTo] = useState<Link[]>([]);
+  const [linksLoading, setLinksLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadLinks() {
+      setLinksLoading(true);
+      const result = await getLinks(task.id);
+      if (result.success) {
+        setLinksFrom(result.data.from);
+        setLinksTo(result.data.to);
+      }
+      setLinksLoading(false);
+    }
+    loadLinks();
+  }, [task.id]);
 
   return (
     <Box flexDirection="column" paddingX={2} paddingY={1}>
@@ -91,7 +159,7 @@ export function TaskDetail({ task, allTasks }: TaskDetailProps) {
             <Text dimColor>Priority:</Text>
           </Box>
           <Text color={getPriorityColor(task.priority)}>
-            {task.priority}
+            {formatPriority(task.priority)}
           </Text>
         </Box>
         <Box>
@@ -137,8 +205,80 @@ export function TaskDetail({ task, allTasks }: TaskDetailProps) {
         </Box>
       )}
 
-      {/* Note: Linked items are stored in .task/links.json */}
-      {/* Use the get_links MCP tool or API to view task links */}
+      {/* Linked Items (from .task/links.json) */}
+      {!linksLoading && (linksFrom.length > 0 || linksTo.length > 0) && (
+        <Box flexDirection="column" marginBottom={1}>
+          <Text bold>Linked Items:</Text>
+
+          {/* Outgoing links */}
+          {linksFrom.length > 0 && (
+            <Box flexDirection="column" paddingLeft={2} paddingTop={1}>
+              <Text dimColor>Links from this task:</Text>
+              {linksFrom.map((link) => {
+                const linkedTask = allTasks.find(t => t.id === link.toTaskId);
+                const label = formatLinkType(link.type, false);
+                return (
+                  <Box key={link.id} flexDirection="column" marginBottom={1} paddingLeft={2}>
+                    <Box>
+                      <Text color="magenta">{label}</Text>
+                      <Text> </Text>
+                      <Text color="cyan">Task #{link.toTaskId}</Text>
+                    </Box>
+                    {linkedTask && (
+                      <Box paddingLeft={2}>
+                        <Text>{linkedTask.title}</Text>
+                        <Text> - </Text>
+                        <Text color={getStatusColor(linkedTask.status)}>
+                          {formatStatus(linkedTask.status)}
+                        </Text>
+                      </Box>
+                    )}
+                    {link.description && (
+                      <Box paddingLeft={2}>
+                        <Text dimColor>Note: {link.description}</Text>
+                      </Box>
+                    )}
+                  </Box>
+                );
+              })}
+            </Box>
+          )}
+
+          {/* Incoming links */}
+          {linksTo.length > 0 && (
+            <Box flexDirection="column" paddingLeft={2} paddingTop={1}>
+              <Text dimColor>Links to this task:</Text>
+              {linksTo.map((link) => {
+                const linkedTask = allTasks.find(t => t.id === link.fromTaskId);
+                const label = formatLinkType(link.type, true);
+                return (
+                  <Box key={link.id} flexDirection="column" marginBottom={1} paddingLeft={2}>
+                    <Box>
+                      <Text color="yellow">{label}</Text>
+                      <Text> </Text>
+                      <Text color="cyan">Task #{link.fromTaskId}</Text>
+                    </Box>
+                    {linkedTask && (
+                      <Box paddingLeft={2}>
+                        <Text>{linkedTask.title}</Text>
+                        <Text> - </Text>
+                        <Text color={getStatusColor(linkedTask.status)}>
+                          {formatStatus(linkedTask.status)}
+                        </Text>
+                      </Box>
+                    )}
+                    {link.description && (
+                      <Box paddingLeft={2}>
+                        <Text dimColor>Note: {link.description}</Text>
+                      </Box>
+                    )}
+                  </Box>
+                );
+              })}
+            </Box>
+          )}
+        </Box>
+      )}
 
       {/* Timestamps */}
       <Box flexDirection="column" marginTop={1}>

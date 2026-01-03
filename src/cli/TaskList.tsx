@@ -25,59 +25,44 @@ function groupTasksByParent(tasks: Task[]): GroupedTasks[] {
   const taskMap = new Map<number, Task>();
   tasks.forEach(task => taskMap.set(task.id, task));
 
-  const groups: GroupedTasks[] = [];
   const processedIds = new Set<number>();
+  const result: Task[] = []; // Flat list in hierarchical order
 
-  // Helper to build hierarchy recursively
-  function buildHierarchy(parent: Task | null, depth: number = 0): GroupedTasks[] {
-    const result: GroupedTasks[] = [];
-    const children: Task[] = [];
+  // Recursive function to add task and its children
+  function addTaskAndChildren(task: Task) {
+    if (processedIds.has(task.id)) return;
 
-    // Find direct children of this parent
-    for (const task of tasks) {
-      if (processedIds.has(task.id)) continue;
+    processedIds.add(task.id);
+    result.push(task);
 
-      const taskParentId = task.parentId;
-      const parentId = parent?.id;
+    // Find and add children
+    const children = tasks
+      .filter(t => t.parentId === task.id)
+      .sort((a, b) => a.id - b.id);
 
-      if (taskParentId === parentId) {
-        children.push(task);
-        processedIds.add(task.id);
-      }
+    for (const child of children) {
+      addTaskAndChildren(child);
     }
-
-    // Sort children by ID
-    children.sort((a, b) => a.id - b.id);
-
-    if (parent || children.length > 0) {
-      result.push({ parent, children: [] });
-
-      // Add children and recursively process their children
-      for (const child of children) {
-        result[0].children.push(child);
-
-        // If this child can have children (epic, user_story, task), recurse
-        if (['epic', 'user_story', 'task'].includes(child.type)) {
-          const subGroups = buildHierarchy(child, depth + 1);
-          result.push(...subGroups);
-        }
-      }
-    }
-
-    return result;
   }
 
-  // Start with top-level items (no parent)
-  const topLevelGroups = buildHierarchy(null, 0);
-  groups.push(...topLevelGroups);
+  // Start with top-level tasks (no parentId)
+  const topLevel = tasks
+    .filter(task => !task.parentId)
+    .sort((a, b) => a.id - b.id);
 
-  // Add any remaining ungrouped tasks
-  const ungrouped = tasks.filter(task => !processedIds.has(task.id));
-  if (ungrouped.length > 0) {
-    groups.push({ parent: null, children: ungrouped });
+  for (const task of topLevel) {
+    addTaskAndChildren(task);
   }
 
-  return groups;
+  // Add any orphaned tasks at the end
+  const orphaned = tasks.filter(task => !processedIds.has(task.id));
+
+  if (orphaned.length > 0) {
+    result.push(...orphaned);
+  }
+
+  // Return as single flat group for simple rendering
+  return [{ parent: null, children: result }];
 }
 
 // Color mapping for status
@@ -127,12 +112,23 @@ function getTypeColor(type: string): string {
 
 // Format status for display
 function formatStatus(status: string): string {
-  return status.replace('_', ' ').toUpperCase();
+  return status
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+
+// Format priority for display
+function formatPriority(priority: string): string {
+  return priority.charAt(0).toUpperCase() + priority.slice(1).toLowerCase();
 }
 
 // Format type for display
 function formatType(type: string): string {
-  return type.replace('_', ' ');
+  return type
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
 }
 
 // Truncate text with ellipsis
@@ -143,17 +139,7 @@ function truncate(text: string, maxLength: number): string {
 
 export function TaskList({ tasks, selectedIndex = -1 }: TaskListProps) {
   const groups = groupTasksByParent(tasks);
-
-  // Build flat list for index mapping
-  const flatTasks: Task[] = [];
-  groups.forEach(group => {
-    if (group.parent) {
-      flatTasks.push(group.parent);
-    }
-    group.children.forEach(child => {
-      flatTasks.push(child);
-    });
-  });
+  const orderedTasks = groups[0]?.children || tasks; // Get the flat ordered list
 
   // Helper to get indent level for a task
   function getIndentLevel(task: Task): number {
@@ -194,96 +180,40 @@ export function TaskList({ tasks, selectedIndex = -1 }: TaskListProps) {
         <Text dimColor>{'─'.repeat(92)}</Text>
       </Box>
 
-      {/* Grouped task rows */}
-      {groups.map((group, groupIndex) => {
-        const isUngrouped = group.parent === null && groupIndex === groups.length - 1 && group.children.length > 0;
+      {/* Task rows with hierarchy */}
+      {orderedTasks.map((task, index) => {
+        const isSelected = index === selectedIndex;
+        const indentLevel = getIndentLevel(task);
+        const indent = '  '.repeat(indentLevel);
 
         return (
-          <Box key={groupIndex} flexDirection="column">
-            {/* Ungrouped header */}
-            {isUngrouped && (
-              <Box marginTop={1} marginBottom={1}>
-                <Text bold dimColor>Ungrouped</Text>
-              </Box>
-            )}
-
-            {/* Parent task (if exists) */}
-            {group.parent && (() => {
-              const taskIndex = flatTasks.indexOf(group.parent!);
-              const isSelected = taskIndex === selectedIndex;
-              const indentLevel = getIndentLevel(group.parent!);
-              const indent = '  '.repeat(indentLevel);
-
-              return (
-                <Box key={group.parent.id}>
-                  <Text color={isSelected ? 'cyan' : 'gray'}>
-                    {isSelected ? '▶ ' : '  '}
-                  </Text>
-                  <Box width={4} marginRight={1}>
-                    <Text bold={isSelected}>{group.parent.id}</Text>
-                  </Box>
-                  <Box width={40} marginRight={1}>
-                    <Text bold={isSelected}>
-                      {indent}{truncate(group.parent.title, 38 - indent.length)}
-                    </Text>
-                  </Box>
-                  <Box width={15} marginRight={1}>
-                    <Text color={getStatusColor(group.parent.status)} bold={isSelected}>
-                      {formatStatus(group.parent.status)}
-                    </Text>
-                  </Box>
-                  <Box width={12} marginRight={1}>
-                    <Text color={getPriorityColor(group.parent.priority)} bold={isSelected}>
-                      {group.parent.priority}
-                    </Text>
-                  </Box>
-                  <Box width={12}>
-                    <Text color={getTypeColor(group.parent.type)} bold={isSelected}>
-                      {formatType(group.parent.type)}
-                    </Text>
-                  </Box>
-                </Box>
-              );
-            })()}
-
-            {/* Child tasks */}
-            {group.children.map((task) => {
-              const taskIndex = flatTasks.indexOf(task);
-              const isSelected = taskIndex === selectedIndex;
-              const indentLevel = getIndentLevel(task);
-              const indent = '  '.repeat(indentLevel);
-
-              return (
-                <Box key={task.id}>
-                  <Text color={isSelected ? 'cyan' : 'gray'}>
-                    {isSelected ? '▶ ' : '  '}
-                  </Text>
-                  <Box width={4} marginRight={1}>
-                    <Text bold={isSelected}>{task.id}</Text>
-                  </Box>
-                  <Box width={40} marginRight={1}>
-                    <Text bold={isSelected}>
-                      {indent}{truncate(task.title, 38 - indent.length)}
-                    </Text>
-                  </Box>
-                  <Box width={15} marginRight={1}>
-                    <Text color={getStatusColor(task.status)} bold={isSelected}>
-                      {formatStatus(task.status)}
-                    </Text>
-                  </Box>
-                  <Box width={12} marginRight={1}>
-                    <Text color={getPriorityColor(task.priority)} bold={isSelected}>
-                      {task.priority}
-                    </Text>
-                  </Box>
-                  <Box width={12}>
-                    <Text color={getTypeColor(task.type)} bold={isSelected}>
-                      {formatType(task.type)}
-                    </Text>
-                  </Box>
-                </Box>
-              );
-            })}
+          <Box key={task.id}>
+            <Text color={isSelected ? 'cyan' : 'gray'}>
+              {isSelected ? '▶ ' : '  '}
+            </Text>
+            <Box width={4} marginRight={1}>
+              <Text bold={isSelected}>{task.id}</Text>
+            </Box>
+            <Box width={40} marginRight={1}>
+              <Text bold={isSelected}>
+                {indent}{truncate(task.title, 38 - indent.length)}
+              </Text>
+            </Box>
+            <Box width={15} marginRight={1}>
+              <Text color={getStatusColor(task.status)} bold={isSelected}>
+                {formatStatus(task.status)}
+              </Text>
+            </Box>
+            <Box width={12} marginRight={1}>
+              <Text color={getPriorityColor(task.priority)} bold={isSelected}>
+                {formatPriority(task.priority)}
+              </Text>
+            </Box>
+            <Box width={12}>
+              <Text color={getTypeColor(task.type)} bold={isSelected}>
+                {formatType(task.type)}
+              </Text>
+            </Box>
           </Box>
         );
       })}
