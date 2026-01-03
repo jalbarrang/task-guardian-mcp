@@ -97,8 +97,68 @@ export async function getNextTaskId(): Promise<Result<number, TaskError>> {
   }
 }
 
+// Hierarchy validation rules
+const HIERARCHY_RULES: Record<string, { parentRequired: boolean; validParentTypes: string[] }> = {
+  epic: { parentRequired: false, validParentTypes: [] },
+  user_story: { parentRequired: false, validParentTypes: ['epic'] },
+  task: { parentRequired: false, validParentTypes: ['user_story'] },
+  sub_task: { parentRequired: true, validParentTypes: ['task'] },
+  bug: { parentRequired: false, validParentTypes: ['epic', 'user_story'] },
+};
+
+async function validateHierarchy(
+  taskType: string,
+  parentId: number | undefined
+): Promise<Result<void, TaskError>> {
+  const rules = HIERARCHY_RULES[taskType];
+
+  if (!rules) {
+    return err({
+      code: 'VALIDATION_ERROR',
+      message: `Unknown task type: ${taskType}`,
+    });
+  }
+
+  // Check if parent is required
+  if (rules.parentRequired && !parentId) {
+    return err({
+      code: 'SUBTASK_REQUIRES_PARENT',
+      taskId: 0, // Will be set by caller
+    });
+  }
+
+  // If parentId is provided, validate it
+  if (parentId) {
+    const parentResult = await getTask(parentId);
+    if (!parentResult.success) {
+      return err({ code: 'PARENT_NOT_FOUND', parentId });
+    }
+
+    const parent = parentResult.data;
+
+    // Check if parent type is valid
+    if (rules.validParentTypes.length > 0 && !rules.validParentTypes.includes(parent.type)) {
+      return err({
+        code: 'INVALID_PARENT_TYPE',
+        taskId: 0, // Will be set by caller
+        parentId,
+        parentType: parent.type,
+        expectedTypes: rules.validParentTypes,
+      });
+    }
+  }
+
+  return ok(undefined);
+}
+
 export async function createTask(input: CreateTaskInput): Promise<Result<Task, TaskError>> {
   try {
+    const taskType = input.type ?? 'task';
+
+    // Validate hierarchy
+    const hierarchyResult = await validateHierarchy(taskType, input.parentId);
+    if (!hierarchyResult.success) return hierarchyResult;
+
     // Get next ID
     const idResult = await getNextTaskId();
     if (!idResult.success) return idResult;
@@ -113,8 +173,8 @@ export async function createTask(input: CreateTaskInput): Promise<Result<Task, T
       description: input.description,
       status: input.status ?? 'pending',
       priority: input.priority ?? 'medium',
-      type: input.type ?? 'task',
-      dependencies: input.dependencies ?? [],
+      type: taskType,
+      ...(input.parentId && { parentId: input.parentId }),
       createdAt: now,
       updatedAt: now,
       ...(input as any), // Include any custom metadata fields
@@ -184,6 +244,23 @@ export async function updateTask(id: number, updates: UpdateTaskInput): Promise<
 
     const existing = existingResult.data;
     const now = new Date().toISOString();
+
+    // Determine the final type and parentId after update
+    const finalType = updates.type ?? existing.type;
+    const finalParentId = updates.parentId !== undefined ? updates.parentId : existing.parentId;
+
+    // Validate hierarchy if type or parentId is changing
+    if (updates.type !== undefined || updates.parentId !== undefined) {
+      const hierarchyResult = await validateHierarchy(finalType, finalParentId);
+      if (!hierarchyResult.success) {
+        // Update taskId in error if needed
+        if (hierarchyResult.error.code === 'SUBTASK_REQUIRES_PARENT' ||
+            hierarchyResult.error.code === 'INVALID_PARENT_TYPE') {
+          return err({ ...hierarchyResult.error, taskId: id } as TaskError);
+        }
+        return hierarchyResult;
+      }
+    }
 
     // Merge updates
     const updated = {

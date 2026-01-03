@@ -8,8 +8,9 @@ import { updateTaskHandler } from '@/tools/update-task.js';
 import { deleteTaskHandler } from '@/tools/delete-task.js';
 import { listTasksHandler } from '@/tools/list-tasks.js';
 import { queryTasksHandler } from '@/tools/query-tasks.js';
-import { addDependencyHandler } from '@/tools/add-dependency.js';
-import { removeDependencyHandler } from '@/tools/remove-dependency.js';
+import { linkTasksHandler } from '@/tools/link-tasks.js';
+import { unlinkTasksHandler } from '@/tools/unlink-tasks.js';
+import { getLinksHandler } from '@/tools/get-links.js';
 import { createTasksHandler } from '@/tools/create-tasks.js';
 import { updateTasksHandler } from '@/tools/update-tasks.js';
 import {
@@ -25,10 +26,12 @@ import {
   ListTasksOutputSchema,
   QueryTasksToolSchema,
   QueryTasksOutputSchema,
-  AddDependencyToolSchema,
-  AddDependencyOutputSchema,
-  RemoveDependencyToolSchema,
-  RemoveDependencyOutputSchema,
+  LinkTasksToolSchema,
+  LinkTasksOutputSchema,
+  UnlinkTasksToolSchema,
+  UnlinkTasksOutputSchema,
+  GetLinksToolSchema,
+  GetLinksOutputSchema,
   CreateTasksToolSchema,
   CreateTasksOutputSchema,
   UpdateTasksToolSchema,
@@ -117,25 +120,36 @@ async function main() {
   );
 
   server.registerTool(
-    'add_dependency',
+    'link_tasks',
     {
-      title: 'Add Dependency',
-      description: 'Add a typed dependency between two tasks (with cycle detection)',
-      inputSchema: AddDependencyToolSchema.shape,
-      outputSchema: AddDependencyOutputSchema.shape,
+      title: 'Link Tasks',
+      description: 'Create a typed link between two tasks (blocks, relates_to, etc.) with cycle detection for blocking links',
+      inputSchema: LinkTasksToolSchema.shape,
+      outputSchema: LinkTasksOutputSchema.shape,
     },
-    addDependencyHandler
+    linkTasksHandler
   );
 
   server.registerTool(
-    'remove_dependency',
+    'unlink_tasks',
     {
-      title: 'Remove Dependency',
-      description: 'Remove a dependency link between two tasks',
-      inputSchema: RemoveDependencyToolSchema.shape,
-      outputSchema: RemoveDependencyOutputSchema.shape,
+      title: 'Unlink Tasks',
+      description: 'Remove a link between tasks by link ID or by task IDs',
+      inputSchema: UnlinkTasksToolSchema.shape,
+      outputSchema: UnlinkTasksOutputSchema.shape,
     },
-    removeDependencyHandler
+    unlinkTasksHandler
+  );
+
+  server.registerTool(
+    'get_links',
+    {
+      title: 'Get Links',
+      description: 'Get all links for a task (both outgoing and incoming)',
+      inputSchema: GetLinksToolSchema.shape,
+      outputSchema: GetLinksOutputSchema.shape,
+    },
+    getLinksHandler
   );
 
   server.registerTool(

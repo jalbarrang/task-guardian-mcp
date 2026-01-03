@@ -6,7 +6,8 @@
   "private": true,
   "bin": {
     "task-guardian": "./src/index.ts",
-    "task-guardian-cli": "./src/cli.tsx"
+    "task-guardian-cli": "./src/cli.tsx",
+    "task-guardian-migrate": "./scripts/migrate-v2.ts"
   },
   "scripts": {
     "start": "bun run src/index.ts",

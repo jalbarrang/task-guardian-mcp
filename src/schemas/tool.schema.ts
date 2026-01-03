@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { TaskStatusSchema, TaskPrioritySchema, TaskTypeSchema, DependencyTypeSchema, DependencySchema, TaskSchema } from './task.schema.js';
+import { TaskStatusSchema, TaskPrioritySchema, TaskTypeSchema, DependencyTypeSchema, DependencySchema, TaskSchema, LinkTypeSchema, LinkSchema } from './task.schema.js';
 
 // Tool input schemas for MCP tool registration
 
@@ -9,7 +9,7 @@ export const CreateTaskToolSchema = z.object({
   status: TaskStatusSchema.optional(),
   priority: TaskPrioritySchema.optional(),
   type: TaskTypeSchema.optional(),
-  dependencies: z.array(DependencySchema).optional(),
+  parentId: z.number().int().positive().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -24,6 +24,7 @@ export const UpdateTaskToolSchema = z.object({
   status: TaskStatusSchema.optional(),
   priority: TaskPrioritySchema.optional(),
   type: TaskTypeSchema.optional(),
+  parentId: z.number().int().positive().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -82,9 +83,31 @@ export const UpdateTasksToolSchema = z.object({
       status: TaskStatusSchema.optional(),
       priority: TaskPrioritySchema.optional(),
       type: TaskTypeSchema.optional(),
+      parentId: z.number().int().positive().optional(),
       metadata: z.record(z.string(), z.unknown()).optional(),
     })
   ).min(1),
+});
+
+// New Link Tool Schemas
+export const LinkTasksToolSchema = z.object({
+  fromTaskId: z.number().int().positive(),
+  toTaskId: z.number().int().positive(),
+  type: LinkTypeSchema,
+  description: z.string().optional(),
+});
+
+export const UnlinkTasksToolSchema = z.object({
+  linkId: z.number().int().positive().optional(),
+  fromTaskId: z.number().int().positive().optional(),
+  toTaskId: z.number().int().positive().optional(),
+}).refine(
+  (data) => data.linkId !== undefined || (data.fromTaskId !== undefined && data.toTaskId !== undefined),
+  { message: "Either linkId or both fromTaskId and toTaskId must be provided" }
+);
+
+export const GetLinksToolSchema = z.object({
+  taskId: z.number().int().positive(),
 });
 
 // Tool output schemas
@@ -138,6 +161,19 @@ export const UpdateTasksOutputSchema = z.object({
   })),
 });
 
+// New Link Tool Output Schemas
+export const LinkTasksOutputSchema = LinkSchema;
+
+export const UnlinkTasksOutputSchema = z.object({
+  success: z.literal(true),
+  linkId: z.number().int().positive(),
+});
+
+export const GetLinksOutputSchema = z.object({
+  from: z.array(LinkSchema),
+  to: z.array(LinkSchema),
+});
+
 export type CreateTaskToolInput = z.infer<typeof CreateTaskToolSchema>;
 export type GetTaskToolInput = z.infer<typeof GetTaskToolSchema>;
 export type UpdateTaskToolInput = z.infer<typeof UpdateTaskToolSchema>;
@@ -148,6 +184,9 @@ export type AddDependencyToolInput = z.infer<typeof AddDependencyToolSchema>;
 export type RemoveDependencyToolInput = z.infer<typeof RemoveDependencyToolSchema>;
 export type CreateTasksToolInput = z.infer<typeof CreateTasksToolSchema>;
 export type UpdateTasksToolInput = z.infer<typeof UpdateTasksToolSchema>;
+export type LinkTasksToolInput = z.infer<typeof LinkTasksToolSchema>;
+export type UnlinkTasksToolInput = z.infer<typeof UnlinkTasksToolSchema>;
+export type GetLinksToolInput = z.infer<typeof GetLinksToolSchema>;
 
 export type CreateTaskOutput = z.infer<typeof CreateTaskOutputSchema>;
 export type GetTaskOutput = z.infer<typeof GetTaskOutputSchema>;
@@ -159,4 +198,7 @@ export type AddDependencyOutput = z.infer<typeof AddDependencyOutputSchema>;
 export type RemoveDependencyOutput = z.infer<typeof RemoveDependencyOutputSchema>;
 export type CreateTasksOutput = z.infer<typeof CreateTasksOutputSchema>;
 export type UpdateTasksOutput = z.infer<typeof UpdateTasksOutputSchema>;
+export type LinkTasksOutput = z.infer<typeof LinkTasksOutputSchema>;
+export type UnlinkTasksOutput = z.infer<typeof UnlinkTasksOutputSchema>;
+export type GetLinksOutput = z.infer<typeof GetLinksOutputSchema>;
 

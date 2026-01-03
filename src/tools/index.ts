@@ -40,6 +40,22 @@ export function toolResponse<T>(result: Result<T, TaskError>) {
     case 'FILE_SYSTEM_ERROR':
       errorMessage = `File system error during ${result.error.operation}`;
       break;
+    case 'INVALID_PARENT_TYPE':
+      errorMessage = `Invalid parent type: Task ${result.error.taskId} cannot have parent ${result.error.parentId} of type '${result.error.parentType}'. Expected: ${result.error.expectedTypes.join(', ')}`;
+      break;
+    case 'PARENT_NOT_FOUND':
+      errorMessage = `Parent task ${result.error.parentId} not found`;
+      break;
+    case 'SUBTASK_REQUIRES_PARENT':
+      errorMessage = `SubTask must have a parent task`;
+      break;
+    case 'LINK_NOT_FOUND':
+      if (result.error.linkId) {
+        errorMessage = `Link ${result.error.linkId} not found`;
+      } else {
+        errorMessage = `Link between tasks ${result.error.fromTaskId} and ${result.error.toTaskId} not found`;
+      }
+      break;
   }
 
   return {

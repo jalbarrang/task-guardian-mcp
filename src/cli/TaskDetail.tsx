@@ -56,16 +56,11 @@ function formatDate(dateString: string): string {
 }
 
 export function TaskDetail({ task, allTasks }: TaskDetailProps) {
-  // task.dependencies contains tasks that THIS task blocks (tasks waiting for this one)
-  const blockedTasks = task.dependencies.map(dep => {
-    const depTask = allTasks.find(t => t.id === dep.taskId);
-    return { dep, task: depTask };
-  });
+  // Find parent task
+  const parentTask = task.parentId ? allTasks.find(t => t.id === task.parentId) : undefined;
 
-  // Find tasks that block this task (tasks that have this task in THEIR dependencies)
-  const blockingTasks = allTasks.filter(t =>
-    t.dependencies.some(dep => dep.taskId === task.id)
-  );
+  // Find child tasks
+  const childTasks = allTasks.filter(t => t.parentId === task.id);
 
   return (
     <Box flexDirection="column" paddingX={2} paddingY={1}>
@@ -105,6 +100,14 @@ export function TaskDetail({ task, allTasks }: TaskDetailProps) {
           </Box>
           <Text>{formatType(task.type)}</Text>
         </Box>
+        {parentTask && (
+          <Box>
+            <Box width={15}>
+              <Text dimColor>Parent:</Text>
+            </Box>
+            <Text color="cyan">#{parentTask.id} {parentTask.title}</Text>
+          </Box>
+        )}
       </Box>
 
       {/* Description */}
@@ -115,78 +118,27 @@ export function TaskDetail({ task, allTasks }: TaskDetailProps) {
         </Box>
       </Box>
 
-      {/* Dependencies - Tasks that block this task */}
-      {blockingTasks.length > 0 && (
+      {/* Child tasks in hierarchy */}
+      {childTasks.length > 0 && (
         <Box flexDirection="column" marginBottom={1}>
-          <Text bold>Dependencies:</Text>
-          <Box paddingLeft={2}>
-            <Text dimColor>This task needs these to be completed first:</Text>
-          </Box>
+          <Text bold>Child Tasks:</Text>
           <Box flexDirection="column" paddingLeft={2} paddingTop={1}>
-            {blockingTasks.map((blockingTask) => {
-              const depLink = blockingTask.dependencies.find(d => d.taskId === task.id);
-              return (
-                <Box key={blockingTask.id} flexDirection="column" marginBottom={1}>
-                  <Box>
-                    <Text color="cyan">• Task #{blockingTask.id}</Text>
-                    {depLink && <Text dimColor> ({depLink.type})</Text>}
-                  </Box>
-                  <Box paddingLeft={2}>
-                    <Text>{blockingTask.title}</Text>
-                    <Text> - </Text>
-                    <Text color={getStatusColor(blockingTask.status)}>
-                      {formatStatus(blockingTask.status)}
-                    </Text>
-                  </Box>
-                  {depLink?.description && (
-                    <Box paddingLeft={2}>
-                      <Text dimColor>Note: {depLink.description}</Text>
-                    </Box>
-                  )}
-                </Box>
-              );
-            })}
-          </Box>
-        </Box>
-      )}
-
-      {/* Dependents - Tasks blocked by this task */}
-      {task.dependencies.length > 0 && (
-        <Box flexDirection="column" marginBottom={1}>
-          <Text bold>Dependents:</Text>
-          <Box paddingLeft={2}>
-            <Text dimColor>These tasks are blocked until this one is done:</Text>
-          </Box>
-          <Box flexDirection="column" paddingLeft={2} paddingTop={1}>
-            {blockedTasks.map(({ dep, task: depTask }, index) => (
-              <Box key={index} flexDirection="column" marginBottom={1}>
-                <Box>
-                  <Text color="magenta">• Task #{dep.taskId}</Text>
-                  <Text dimColor> ({dep.type})</Text>
-                </Box>
-                {depTask ? (
-                  <Box paddingLeft={2}>
-                    <Text>{depTask.title}</Text>
-                    <Text> - </Text>
-                    <Text color={getStatusColor(depTask.status)}>
-                      {formatStatus(depTask.status)}
-                    </Text>
-                  </Box>
-                ) : (
-                  <Box paddingLeft={2}>
-                    <Text dimColor>(Task not found)</Text>
-                  </Box>
-                )}
-                {dep.description && (
-                  <Box paddingLeft={2}>
-                    <Text dimColor>Note: {dep.description}</Text>
-                  </Box>
-                )}
+            {childTasks.map((child) => (
+              <Box key={child.id} marginBottom={1}>
+                <Text color="cyan">• Task #{child.id}</Text>
+                <Text> - {child.title}</Text>
+                <Text> </Text>
+                <Text color={getStatusColor(child.status)}>
+                  ({formatStatus(child.status)})
+                </Text>
               </Box>
             ))}
           </Box>
         </Box>
       )}
+
+      {/* Note: Linked items are stored in .task/links.json */}
+      {/* Use the get_links MCP tool or API to view task links */}
 
       {/* Timestamps */}
       <Box flexDirection="column" marginTop={1}>
@@ -214,6 +166,7 @@ export function TaskDetail({ task, allTasks }: TaskDetailProps) {
             'status',
             'priority',
             'type',
+            'parentId',
             'dependencies',
             'createdAt',
             'updatedAt',
@@ -232,6 +185,7 @@ export function TaskDetail({ task, allTasks }: TaskDetailProps) {
                     'status',
                     'priority',
                     'type',
+                    'parentId',
                     'dependencies',
                     'createdAt',
                     'updatedAt',
